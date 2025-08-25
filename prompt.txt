@@ -1,1 +1,69 @@
-https://tksijo0ztk.execute-api.us-east-1.amazonaws.com/default/llamarequest
+You are an expert full-stack JavaScript/TypeScript engineer.  
+I want you to create Phase-1 of a SQL query assistant project.  
+Everything should be in JavaScript/TypeScript only (no Python).
+
+Requirements:
+
+1. Tech Stack:
+   - Frontend: React + TailwindCSS (modern UI, hospital/medical dashboard theme, light mode with blue accents).
+   - Backend: Node.js + Express.
+   - Database: Connect to a relational DB (Postgres or Oracle).
+   - Use environment variables for DB credentials.
+
+2. Project Structure:
+   /frontend → React app
+   /backend → Node/Express app
+   /backend/config → config files for DB connection
+   /backend/routes → API routes
+   /backend/db.js → DB connection logic
+   /backend/.env.example → example env file with keys
+   Root README.md with setup instructions.
+
+3. Frontend Features:
+   - Layout like a hospital dashboard:
+     - Left panel: schema viewer (load from backend `/schema` endpoint).
+     - Top bar: "🏥 Hospital Query Assistant".
+     - Main panel:
+       - Textarea for **direct SQL query input**.
+       - Button: "Execute Query".
+       - Below: show the query in a SQL code block.
+       - Results: render DB response in a clean data table.
+     - Suggested queries panel (dummy examples:  
+         “SELECT * FROM patients LIMIT 5;”  
+         “SELECT * FROM doctors WHERE specialization='Cardiology';”).
+   - Styling: light mode, white background, blue (#1E88E5) accents, Tailwind components with rounded corners and shadows.
+
+4. Backend Features:
+   - Use Express server.
+   - DB connection should be configured via environment variables in `.env`:
+     - DB_HOST
+     - DB_PORT
+     - DB_USER
+     - DB_PASSWORD
+     - DB_NAME
+     - DB_TYPE (e.g. postgres or oracle)
+   - API Endpoints:
+     - GET /schema → fetch table + columns from information_schema (or Oracle ALL_TAB_COLUMNS)
+     - POST /execute → accepts { "sql": "SELECT * FROM patients" } and executes query safely
+   - Return results in JSON for the frontend to render.
+
+5. Config & Safety:
+   - Use dotenv for managing environment variables.
+   - Create `config/db.js` that exports a reusable connection pool.
+   - Implement basic SQL safety: allow only SELECT statements (block INSERT/UPDATE/DELETE/DROP).
+   - Return errors in a clean JSON format.
+
+6. Deliverables:
+   - Full project scaffold with frontend and backend.
+   - Backend should connect to DB (with credentials from `.env`).
+   - Frontend should call backend API, send SQL, and display results in a styled table.
+   - Dummy schema + data queries should work end-to-end when DB is available.
+
+7. Running:
+   - Instructions in README.md:
+     - `cd backend && npm install && npm run dev`
+     - `cd frontend && npm install && npm start`
+   - Backend reads `.env` file for DB config.
+   - Frontend can set `API_BASE_URL` in a config file or `.env`.
+
+Please generate the codebase with correct folder structure, configs, and detailed README.
