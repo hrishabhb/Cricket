@@ -1,15 +1,9 @@
-from openai import OpenAI
-import os
-
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-)
-
-response = client.chat.completions.create(
-    model="moonshotai/kimi-k2",  # swap in whichever free model you want
-    messages=[{"role": "user", "content": "Explain quantum computing in simple terms"}]
-)
-print(response.choices[0].message.content)
-
-deepseek/deepseek-r1:free
+curl https://api.groq.com/openai/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer " \
+  -d '{
+    "model": "llama3-8b-8192",
+    "messages": [
+      {"role": "user", "content": "Hello Groq, say something funny!"}
+    ]
+  }'
