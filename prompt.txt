@@ -1,33 +1,13 @@
-I have a JavaScript/React web app that connects to a database and lets the user enter SQL queries in a textbox. 
-Right now, it executes the query and shows the results in a plain HTML table. 
+from openai import OpenAI
 
-I want to extend this app by adding data visualizations as part of Phase 1. 
-Here is what I need you to do:
+client = OpenAI(
+    base_url="https://api.aimlapi.com/v1",
+    api_key="<YOUR_AIMLAPI_KEY>",    
+)
 
-1. Keep the existing SQL input box and execution logic.
-2. After the SQL query executes, I want to show the results in two ways:
-   a) As a table (like it is now).
-   b) As a chart visualization.
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Write a one-sentence story about numbers."}]
+)
 
-3. Add a dropdown or tabs that let the user select the chart type:
-   - Table (default)
-   - Bar chart
-   - Line chart
-   - Pie chart
-
-4. Use a free JavaScript charting library, preferably **Recharts** (React-based) or **Chart.js**. 
-   The chart should automatically adapt to the query result:
-   - If there are categorical values with counts, make a bar or pie chart.
-   - If there are time-series values, make a line chart.
-   - Otherwise fall back to table view.
-
-5. Implement a reusable `Visualization` component that accepts query results as JSON 
-   and renders either a table or chart based on the dropdown selection.
-
-6. Keep the styling clean, use a light theme with blue accents (matching medical dashboard look).
-7. Make sure everything works with dummy data first, then I will connect it to the live SQL backend.
-
-Please generate:
-- A React component for the visualization
-- Updated main app code integrating this component
-- Any required config or imports for Chart.js/Recharts
+print(response.choices[0].message.content)
