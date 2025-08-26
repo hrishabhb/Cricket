@@ -1,35 +1,72 @@
-## 📁 Project Structure
+You are an expert full-stack developer building a Fortune-500 grade healthcare data app. 
+We already have Phase 1: a working React + Node.js/Express + Oracle DB app where the user 
+can enter raw SQL queries, execute them against Oracle, and visualize results in charts.
 
-```
-IRP Chatbot/
-├── package.json                 # Root package.json for concurrent dev setup
-├── README.md                    # This file
-│
-├── backend/                     # Node.js/Express API server
-│   ├── package.json            # Backend dependencies
-│   ├── server.js               # Main server entry point
-│   ├── env.example             # Environment variables template
-│   ├── config/
-│   │   └── db.js              # Database connection configuration
-│   └── routes/
-│       └── api.js             # API route handlers
-│
-└── frontend/                   # React application
-    ├── package.json           # Frontend dependencies
-    ├── tailwind.config.js     # TailwindCSS configuration
-    ├── postcss.config.js      # PostCSS configuration
-    ├── public/
-    │   ├── index.html         # HTML template
-    │   └── manifest.json      # PWA manifest
-    └── src/
-        ├── index.js           # React entry point
-        ├── index.css          # Global styles and Tailwind imports
-        ├── App.js             # Main application component
-        ├── services/
-        │   └── api.js         # API service layer
-        └── components/
-            ├── SchemaPanel.js      # Database schema explorer
-            ├── QueryInput.js       # SQL query input component
-            ├── ResultsTable.js     # Query results display
-            └── SuggestedQueries.js # Example queries panel
-```
+Now we need Phase 2: Add AI-powered Natural Language → SQL generation using the OpenAI API.
+
+## Requirements:
+1. **Architecture**:
+   - Keep existing backend/frontend folder structure.
+   - Add a new `ai.js` route in the backend for AI integration.
+   - Add a new `openai.js` service to connect to the OpenAI API.
+   - Add a `schema.js` service to fetch and compact Oracle DB schema for AI context.
+   - Frontend gets a new `NLInput.js` component where users ask questions in natural language.
+
+2. **Backend**:
+   - Use Express.
+   - Route: `POST /ai/convert` → accepts `{ question }`.
+   - Service: Calls OpenAI (`gpt-4o-mini` or `gpt-4`) with schema + user question → returns SQL.
+   - Guardrails: Only allow SELECT, block DDL/DML, add LIMIT/ROWNUM if not provided.
+   - Use Oracle DB connection from existing `db.js`.
+   - Reuse `/api/run` route to execute SQL once generated.
+
+3. **Frontend**:
+   - Add `NLInput.js` with:
+     - Textarea for natural language input.
+     - Preview panel showing generated SQL.
+     - Run button → executes SQL against DB (calls `/api/run`).
+   - Update `App.js` to integrate `NLInput`, `ResultsTable`, and `Visualization` seamlessly.
+   - Keep styling consistent with Tailwind (light theme with blue accents).
+
+4. **Workflow**:
+   - User types a natural language query: "Show facility count by city for last 6 months".
+   - Frontend calls `/ai/convert`.
+   - Backend uses OpenAI API with schema → returns SQL:
+     ```sql
+     SELECT city, COUNT(*) AS facility_count
+     FROM facility
+     WHERE created_dt >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -6)
+     GROUP BY city
+     ORDER BY facility_count DESC;
+     ```
+   - SQL is previewed in UI.
+   - User clicks **Run** → SQL executed on Oracle via existing executor.
+   - Results shown as both table + chart.
+
+5. **Schema Handling**:
+   - Backend `schema.js` should query Oracle’s `ALL_TAB_COLUMNS` (or relevant schema tables).
+   - Convert schema into compact form:
+     ```
+     TABLE facility(id, name, city, created_dt)
+     TABLE patient(id, name, age, diagnosis)
+     ```
+   - Pass compact schema to the AI prompt.
+
+6. **Security & Best Practices**:
+   - Never allow destructive SQL.
+   - Log all AI prompts, generated SQL, and execution status in backend logs.
+   - Handle errors gracefully on frontend (bad SQL, no results, timeout).
+
+7. **Deliverables**:
+   - Updated backend code: `routes/ai.js`, `services/openai.js`, `services/schema.js`.
+   - Updated frontend: `NLInput.js`, minor changes in `App.js`.
+   - Example `.env` variables: `OPENAI_API_KEY`, `ORACLE_CONN_STRING`.
+
+## Output expected from you:
+- Full backend implementation (Express routes + services).
+- Full frontend component (`NLInput.js`).
+- Updated `App.js` to wire everything together.
+- Example prompt template for OpenAI.
+- Example schema summarizer query for Oracle.
+
+Follow production-grade practices: modular code, clear error handling, professional logging.
