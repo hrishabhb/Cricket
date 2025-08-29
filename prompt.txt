@@ -1,9 +1,5 @@
-curl https://api.groq.com/openai/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer " \
-  -d '{
-    "model": "llama3-8b-8192",
-    "messages": [
-      {"role": "user", "content": "Hello Groq, say something funny!"}
-    ]
-  }'
+Proficient Software Development Engineer with 3+ years of experience in healthcare data analytics, technology solutions, and clinical research services. Skilled in building scalable applications, NLP pipelines, and AI-driven systems with strong expertise in Python, SQL, and Java. Experienced in working with machine learning models (BERT, BioBERT, LLaMA) for text classification, retrieval-augmented generation (RAG), and medical report analytics. Adept at database management (SQL Server, MongoDB), cloud platforms (AWS, Azure), and modern data engineering practices.
+
+Holds certifications in Microsoft Azure Fundamentals, AI Fundamentals, Oracle Cloud Infrastructure 2024, and Generative AI. Strong foundation in supervised and unsupervised learning, regression, classification, and data visualization.
+
+Earned a Bachelor of Engineering (BE) degree in Mechanical Engineering from RV College of Engineering with consistently high academic performance. Currently focused on advancing in the intersection of healthcare and AI, seeking challenging roles in Data Science and AI Engineering to leverage technical expertise, contribute to innovation, and drive organizational success.
