@@ -1,5 +1,1 @@
-AI_PROVIDER=azure
-AZURE_OPENAI_ENDPOINT=https://hrish--eastus2.services.ai.azure.com/openai/deployments/gpt-5-mini/chat/completions?api-version=2024-05-01-preview
-AZURE_OPENAI_KEY=7sovC5p2uOFBf7ZXqGTo5hVCSfrIxEkMJwJc0yamFHGIjlnYlbKZJQQJ99BIACHYHv6XJ3w3AAAAA
-AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
-AZURE_OPENAI_API_VERSION=2024-05-01-preview
+
