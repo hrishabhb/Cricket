@@ -1,296 +1,95 @@
-I'll analyze the entire codebase and generate a comprehensive text summary that you can use as context for ChatGPT. Let me start by exploring the codebase structure and understanding how the application works.
+SYSTEM: You are an *agentic software engineer + prompt engineer* with full code-writing and system-design privileges. Your task: **build and deliver a production-ready, read-only analytics backend service** named **IRP-Agent** that implements this end-to-end workflow for messy healthcare data:
 
-[6 tools called]
+Workflow requirements (must be implemented exactly):
+  1. RECEIVE user natural-language query + optional parameters (report_name, start_date, end_date, preview_limit, dialect).  
+  2. CREATE and EXECUTE a **minimal exploratory SELECT** (safe, parameterized, <= preview_limit rows) to sample relevant columns (prefer rpt_report_fact, rpt_case_fact).  
+  3. ANALYZE the sample: list distinct values, counts, percentages, and detect patterns (case variants, trailing spaces, numeric '0'/'1', comma-separated multi-values, free-text labels).  
+  4. PROPOSE deterministic **normalization rules** for each relevant column (CASE expressions / CTEs) — not only boolean; support multi-class diagnoses.  
+  5. BUILD a **final SELECT-only SQL** that applies normalization and requested aggregations/filters, using only parameter placeholders (no string interpolation).  
+  6. EXECUTE final SQL (with safeguards: row / time limits) and RETURN structured JSON containing: initial_sql, analysis, normalization_rules_sql, final_sql, results_preview (<=10 rows), aggregates, transformations, confidence (0.0–1.0), summary (<=3 sentences), notes.  
+  7. ALWAYS enforce safety: reject or require confirmation for non-SELECT or heavy queries (>1M rows / full table scans). Use parameterized queries. No destructive statements anywhere.
 
-Now let me analyze the backend configuration, routes, and services:
+DELIVERABLES (code + infra; generate files and contents):
+  - A complete Node.js (v20+) project scaffold named `irp-agent` with package.json, using Express for the API.
+  - `routes/ai.js` with endpoints:
+      POST `/ai/convert` -> returns final_sql (no execution)
+      POST `/ai/convert-and-execute` -> performs full workflow and returns JSON as defined
+      GET `/ai/schema` -> returns current schema metadata (cached)
+      POST `/ai/clear-cache` -> clears schema/embedding caches (dev only)
+  - `services/`:
+      `openaiClient.js` — wrapper for Azure OpenAI Responses API (GPT-5-mini). Use structured messages, include recommended controls: reasoning_effort, verbosity, preamble, temperature, max_tokens. Implement retry/backoff and detailed ai logging (ai-requests, ai-errors, ai-performance).
+      `dbClient.js` — Oracle client wrapper supporting thick/thin modes, pool management, parameterized execution, timeout and row limiting. Implement query-explain path for heavy queries and a dry-run mode.
+      `normalizer.js` — implements detection, rule generation, and CASE-expression building functions. Export functions: `analyzeSample(rows)`, `generateNormalizationSQL(rules)`, `applyNormalizationToSQL(baseSQL, rules)`.
+      `orchestrator.js` — implements the workflow: parse NL intent, call `build exploratory SQL`, call DB sample, call `normalizer`, build final SQL, validate final SQL (SELECT-only), execute safe-limited final SQL, prepare output JSON.
+  - `config/` with env var-driven config (AZURE_* keys, ORACLE_* connection strings, preview_limit default, max_execution_rows, max_execution_time_ms).
+  - `config/logger.js` — Winston-based logging with JSON logs, rotation, and separation for AI logs and app logs.
+  - `middleware/safety.js` — SQL safety checker blocking non-SELECT tokens and dangerous functions; detects expensive patterns and rejects/paginates.
+  - `tests/`:
+      Unit tests for normalizer (value variants), dbClient (parameter binding), orchestrator workflow (mock DB), and openaiClient (mocked responses).
+      At least 8 test cases including: boolean variants, free-text diagnosis variants, comma-separated sub_category, numeric strings '0'/'1', unknown/missing values, heavy-query rejection.
+  - `Dockerfile` and `docker-compose.yml` for local runs (service + a lightweight Oracle-compatible mock or test DB for CI).
+  - `ci/` or GitHub Actions workflow: run tests, lint (ESLint), build, and optionally run integration tests with mocked DB.
+  - README.md with run instructions, env variables list, and API usage examples (curl and axios) including sample request body and expected JSON output.
+  - Example SQL CASE templates for `display_value`, `test_site_yn` and a generic function for adding new column rules.
 
-[5 tools called]
+IMPLEMENTATION DETAILS & RULES:
+  - Use parameterized queries only. Bind user params (no string templating of user input).
+  - Use Oracle dialect hints: prefer `ROWNUM` for preview limiting with fallback `FETCH FIRST` if dialect indicates generic SQL.
+  - Normalizer must:
+      - Trim and lowercase values before matching.
+      - Detect tokens by splitting on `, ; / |` and by detecting CSV-like patterns.
+      - Use substring/regex matching (REGEXP_LIKE) as optional comments when regex not supported.
+      - Produce CASE expressions (Oracle-ready) as the authoritative transform.
+      - Output human-readable mapping explanation and confidence per mapping.
+  - AI integration:
+      - Use GPT-5-mini with controls: `reasoning_effort=high`, `verbosity=medium`, `preamble="Plan then act"`, `temperature=0.15`, `max_tokens=1600`.
+      - The model may be used to propose normalization heuristics but the final CASE SQL must be deterministic and produced by your code (i.e., do not rely on the model to run regex at runtime).
+  - Safety & Performance:
+      - Enforce `max_execution_rows` and `max_execution_time_ms`. If final SQL exceeds limits, return a summarized aggregate (GROUP BY + COUNT) instead of raw rows and ask for explicit confirmation.
+      - Log all AI inputs/outputs to `ai-text-io.log` and performance to `ai-performance.log`.
+  - Output format: strictly JSON with these keys: initial_sql (string), analysis (array), normalization_rules_sql (string), final_sql (string), results_preview (array of objects), aggregates (object), transformations (array of strings), confidence (float 0-1), summary (<=3 sentences), notes (string).
 
-Now let me analyze the backend services and frontend components:
+CODE STYLE & QUALITY:
+  - Use ES modules (import/export) or commonjs consistently.
+  - Provide JSDoc for public functions.
+  - Add ESLint config and Prettier.
+  - Keep functions small and testable; inject dependencies for easier mocking (DB and OpenAI clients).
 
-[6 tools called]
+EXAMPLES (must include directly in the repository):
+  - Example request (axios):
+    ```js
+    const resp = await axios.post('http://localhost:3001/ai/convert-and-execute', {
+      user_nl: "Show counts of cancer types for report 'STS GTSD DASHBOARD REPORT' between 2024-01-01 and 2024-06-30. Normalize 'no cancer found', 'benign tumor', 'lung cancer', '0'/'1'.",
+      params: { report_name: "STS GTSD DASHBOARD REPORT", start_date: "2024-01-01", end_date: "2024-06-30", preview_limit: 500 }
+    });
+    // resp.data must match the structured JSON described earlier
+    ```
+  - Example `initial_sql` and `final_sql` templates included in README.
 
-Now let me continue analyzing the remaining components and services:
+DELIVERY FORMAT:
+  - Produce the full repository tree listing and then file-by-file contents. For each file include the exact file path and full source code. If files are long, include them fully — do NOT omit code.
+  - Also provide a `run.sh` script that performs `npm ci`, runs tests, and starts the server in dev mode.
+  - Provide simple data-mocking SQL scripts so CI can run basic integration tests without a real Oracle.
 
-[6 tools called]
+DEADLINES & ASSUMPTIONS:
+  - Assume you can generate code fully in this session. Do not ask for extra files or permissions. If some environment-specific secrets are needed, leave placeholders in `.env.example`.
+  - If you cannot run or test against a real Oracle DB in this environment, provide clear mocking and instructions for how to wire a real Oracle connection in production.
 
-Now let me complete the analysis by looking at the remaining services and generate the comprehensive summary:
+ERROR HANDLING & USER FEEDBACK:
+  - If model/DB errors occur, return structured error objects with `error_type`, `message`, `retriable` boolean, and `suggested_action`.
+  - Provide user-facing concise messages and developer-level logs for debugging.
 
-[3 tools called]
+RESTRICTIONS:
+  - NO destructive DB operations anywhere.
+  - NO hard-coded secrets.
+  - DO NOT auto-run heavy (>1M row) queries; require user confirmation flag `allow_heavy:true` to proceed.
 
-Now let me generate the comprehensive text summary:
+OUTPUT REQUIRED FROM YOU (Cursor agent) IN THIS RUN:
+  1. A single archive-style response: project tree and all file contents ready to copy into files.
+  2. A short runbook (README section) with start commands and example requests.
+  3. A brief testing plan describing the 8+ unit/integration tests included and how to run them.
+  4. A summary paragraph (<=5 lines) explaining design tradeoffs, safety guards, and future improvements.
 
-[1 tool called]
+If anything in this instruction conflicts with platform limits or policies, explain clearly which part you cannot produce and why, and provide the maximal safe alternative.
 
-# IRP Chatbot Application - Comprehensive Technical Analysis
-
-## Overview
-The IRP Chatbot is a sophisticated healthcare data analysis application that combines natural language processing with SQL generation capabilities. The system features a React frontend called "MeasureMind" and a Node.js backend that integrates with Azure OpenAI services to convert natural language questions into Oracle SQL queries for healthcare database analysis.
-
-## Architecture Overview
-
-### Technology Stack
-- **Frontend**: React 18.2.0 with TailwindCSS, Recharts for visualization, Lucide React icons
-- **Backend**: Node.js with Express 4.18.2, Winston logging, Azure OpenAI integration
-- **Database**: Oracle Database with healthcare-specific schemas
-- **AI Integration**: Azure OpenAI (GPT-5 Mini) for natural language to SQL conversion
-- **Development**: Concurrently for parallel dev servers, Nodemon for auto-restart
-
-### Project Structure
-```
-irpchatbot/
-├── backend/           # Node.js Express API server
-├── frontend/          # React web application  
-├── node_modules/      # Root dependencies
-└── package.json       # Root orchestration scripts
-```
-
-## Backend Architecture
-
-### Core Components
-
-#### 1. Server Configuration (`server.js`)
-- Express server running on port 3001
-- Comprehensive middleware stack: CORS, Helmet security, JSON parsing
-- Request/response logging with unique request IDs
-- Graceful shutdown handling for database connections
-- Environment-specific CORS origins
-- Global error handling with development/production modes
-
-#### 2. Database Layer (`config/db.js`)
-- **Multi-database support**: PostgreSQL and Oracle
-- **Oracle Integration**: 
-  - Thick/thin mode detection with automatic fallback
-  - Multiple connection strategies for different Oracle configurations
-  - Support for service names and SIDs
-  - Comprehensive error handling and logging
-- **Connection Management**:
-  - Pool-based connections with configurable limits
-  - Automatic retry logic with multiple connection strategies
-  - Query execution with proper parameter binding
-  - Schema introspection capabilities
-
-#### 3. Logging System (`config/logger.js` & `config/aiLogger.js`)
-- **Dual logging architecture**:
-  - General application logging (Winston-based)
-  - Specialized AI request/response logging
-- **Log Categories**:
-  - `app.log`: General application events
-  - `error.log`: Error-specific logging
-  - `ai-requests.log`: AI API interactions
-  - `ai-errors.log`: AI-specific errors
-  - `ai-performance.log`: Performance metrics
-  - `ai-context.log`: Context processing details
-  - `ai-text-io.log`: Input/output text audit trail
-- **Features**:
-  - Automatic log rotation and size management
-  - JSON structured logging for AI interactions
-  - Request correlation with unique IDs
-  - Performance timing and token usage tracking
-
-#### 4. API Routes
-
-##### General API (`routes/api.js`)
-- **GET /api/health**: Database connectivity health check
-- **GET /api/schema**: Database schema introspection with fallback queries
-- **POST /api/execute**: SQL execution with safety validation (SELECT-only)
-- **GET /api/suggested-queries**: Pre-built healthcare-specific example queries
-- **GET /api/test-tables**: Database table accessibility testing
-- **SQL Safety Features**:
-  - Whitelist approach (SELECT statements only)
-  - Dangerous keyword detection and blocking
-  - Input validation and sanitization
-
-##### AI API (`routes/ai.js`)
-- **POST /ai/convert**: Natural language to SQL conversion
-- **POST /ai/convert-and-execute**: Combined conversion and execution
-- **GET /ai/schema**: Schema information for AI context
-- **GET /ai/test**: AI service connectivity testing
-- **POST /ai/clear-cache**: Development cache management
-- **Advanced Features**:
-  - Context payload support for structured AI prompts
-  - Legacy schema optimization (deprecated)
-  - SQL validation against database schema
-  - Comprehensive error handling and user feedback
-
-#### 5. AI Integration (`services/openai.js`)
-
-##### Azure OpenAI Service
-- **Configuration**: GPT-5 Mini deployment with configurable parameters
-- **Features**:
-  - Reasoning effort and verbosity control
-  - Custom response parsing with fallback heuristics
-  - Context payload processing for structured prompts
-  - Healthcare-specific system prompts with domain rules
-- **Healthcare Domain Intelligence**:
-  - Patient counting best practices (DISTINCT PATIENT_ID)
-  - Medical condition coding (1=Yes, 0=No, NULL=Unknown)
-  - Boolean field handling with TRIM() for _YN columns
-  - Oracle date function preferences
-  - Facility and patient relationship awareness
-
-##### Schema Management (`services/SchemaManager.js`)
-- **Real-time schema loading** from extracted database metadata
-- **Hardcoded fallback schemas** for healthcare tables
-- **AI-optimized schema descriptions** with relationship mapping
-- **Foreign key detection** and relationship inference
-- **Column search capabilities** across multiple tables
-
-##### Smart Schema Optimization (`services/smartSchema.js`)
-- **DEPRECATED**: Legacy optimization system being phased out
-- **Multi-strategy table relevance detection**:
-  - Keyword matching
-  - Column name analysis
-  - Semantic pattern recognition
-  - Relationship expansion
-- **Caching system** with multiple levels (metadata, semantic, embedding)
-
-#### 6. Database Schema Structure
-
-##### Core Healthcare Tables
-- **FACILITY**: Healthcare facilities with location, type, and status information
-- **ACCOUNT**: User accounts with authentication and profile data
-- **FORM**: Data collection forms with versioning and status
-- **FIELD**: Individual form fields with validation rules
-- **HEALTH_SYSTEM**: Health system organizations managing multiple facilities
-- **RPT_CALCULATIONS**: Calculated metrics and derived reporting values
-- **RPT_REPORT_FACT**: Fact table for report metrics and measurements
-- **RPT_CASE_FACT**: Case-related reporting data with patient information
-- **RPT_CASE_MISS_FACT**: Missing case data tracking
-
-##### Data Characteristics
-- **Oracle-specific data types**: VARCHAR2, NUMBER, TIMESTAMP(6), CHAR(4)
-- **Healthcare coding patterns**: Medical conditions as '1'/'0'/NULL
-- **Boolean fields**: _YN suffix columns with potential trailing spaces
-- **Audit fields**: CREATED_DT, UPDATED_DT, CREATED_BY, UPDATED_BY
-- **Relationship patterns**: FACILITY_ID as common foreign key
-
-## Frontend Architecture
-
-### Core Components
-
-#### 1. Main Application (`App.js`)
-- **Dual-mode interface**: AI Assistant vs Manual SQL modes
-- **State management**: Query results, loading states, error handling
-- **Connection monitoring**: Real-time backend health checking
-- **Mode switching**: Seamless transition between AI and manual modes
-
-#### 2. AI Interface (`components/NLInput.js`)
-- **Natural language input**: Multi-line textarea with character limits
-- **Context management**: Structured context payload building
-- **Healthcare presets**: Pre-configured context for healthcare queries
-- **Real-time validation**: Input validation and safety checks
-- **SQL preview**: Generated query display with syntax highlighting
-- **Context configuration panel**: 
-  - Important tables management
-  - Table-specific fetch instructions
-  - Join rules configuration
-  - Additional hints system
-
-#### 3. Data Visualization (`components/Visualization.js`)
-- **Multi-view support**: Table, Bar Chart, Line Chart, Pie Chart
-- **Intelligent chart recommendations**: Automatic chart type detection based on data analysis
-- **Data analysis engine**:
-  - Column type detection (numeric, text, date)
-  - Time series identification
-  - Categorical data recognition
-- **Interactive features**:
-  - Search and filtering
-  - Pagination for large datasets
-  - Full-screen expansion
-  - CSV export functionality
-- **Display-only mode**: Support for SQL preview without execution
-
-#### 4. Schema Explorer (`components/SchemaPanel.js`)
-- **Collapsible table browser**: Expandable tree view of database tables
-- **Column details**: Data types, constraints, nullability indicators
-- **Real-time refresh**: Schema reloading capabilities
-- **Visual indicators**: Icons for different column types and constraints
-
-#### 5. Context Management (`services/ContextCollector.js`)
-- **Structured context building**: Organized approach to AI prompt enhancement
-- **Healthcare presets**: Domain-specific context templates
-- **Validation system**: Context payload validation and error reporting
-- **Method chaining**: Fluent API for context building
-- **Serialization**: JSON payload generation for API transmission
-
-#### 6. API Service Layer (`services/api.js`)
-- **Axios-based HTTP client**: Configured for backend communication
-- **Request/response interceptors**: Automatic logging and error handling
-- **Timeout management**: 30-second request timeout
-- **Environment adaptation**: Development proxy vs production direct calls
-- **Comprehensive error handling**: Network, server, and application error differentiation
-
-## Key Features and Capabilities
-
-### AI-Powered Query Generation
-1. **Natural Language Processing**: Convert healthcare questions to Oracle SQL
-2. **Context-Aware Generation**: Use structured context payloads for better results
-3. **Healthcare Domain Expertise**: Built-in knowledge of medical data patterns
-4. **Safety Validation**: Multiple layers of SQL safety checking
-5. **Error Recovery**: Graceful handling of AI service failures
-
-### Data Visualization
-1. **Automatic Chart Detection**: Intelligent recommendation of visualization types
-2. **Interactive Charts**: Hover tooltips, legends, responsive design
-3. **Multiple Chart Types**: Bar, line, pie charts with healthcare color themes
-4. **Data Export**: CSV export with proper formatting
-5. **Large Dataset Handling**: Pagination and search for performance
-
-### Database Integration
-1. **Multi-Database Support**: PostgreSQL and Oracle compatibility
-2. **Connection Resilience**: Multiple connection strategies and automatic retry
-3. **Schema Introspection**: Real-time database schema discovery
-4. **Query Safety**: Whitelist-based approach allowing only SELECT statements
-5. **Performance Monitoring**: Query execution timing and optimization
-
-### Healthcare Domain Features
-1. **Patient Data Handling**: Proper patient counting with deduplication
-2. **Medical Coding Support**: Understanding of healthcare data coding patterns
-3. **Facility Management**: Multi-facility healthcare organization support
-4. **Reporting Infrastructure**: Comprehensive fact table structure for analytics
-5. **Audit Trail**: Complete logging of AI interactions and query generation
-
-## Technical Strengths
-
-### Scalability and Performance
-- Pool-based database connections with configurable limits
-- Efficient caching systems for schema and AI responses
-- Pagination and lazy loading for large datasets
-- Optimized chart rendering with responsive containers
-
-### Security and Safety
-- SQL injection prevention through whitelist approach
-- Comprehensive input validation and sanitization
-- Secure credential management via environment variables
-- Request correlation for audit trails
-
-### Observability and Monitoring
-- Multi-level logging system with structured data
-- Performance metrics collection and analysis
-- AI interaction audit trails
-- Real-time health monitoring and status reporting
-
-### User Experience
-- Dual-mode interface catering to different user types
-- Intelligent context suggestions and presets
-- Real-time feedback and error handling
-- Responsive design with modern UI components
-
-## Areas for Enhancement
-
-### Current Limitations
-1. **Schema Optimization**: Legacy SmartSchemaService marked for deprecation
-2. **Context Management**: Manual context building could be more automated
-3. **Error Handling**: Some AI errors could provide more user-friendly messages
-4. **Caching**: Limited caching of AI responses for similar queries
-5. **Multi-tenancy**: No built-in support for multiple healthcare organizations
-
-### Architectural Opportunities
-1. **Microservices**: Potential separation of AI service from main backend
-2. **Real-time Features**: WebSocket integration for live query collaboration
-3. **Advanced Analytics**: More sophisticated data analysis and insights
-4. **Mobile Support**: Progressive Web App capabilities
-5. **Integration APIs**: RESTful APIs for third-party healthcare system integration
-
-This application represents a sophisticated healthcare data analysis platform that successfully bridges the gap between natural language queries and complex SQL generation, with strong emphasis on safety, observability, and domain expertise.
+USER: Now implement — produce the full repository with files, code, tests, Docker config, README, and run instructions in this single response. Start with a project tree then file contents.
