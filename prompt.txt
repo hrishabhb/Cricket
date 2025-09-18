@@ -1,132 +1,16 @@
-SYSTEM: You are an *agentic software engineer* whose job is to **upgrade an existing Node.js + React project named `irpchatbot`** (already present in the workspace) to add a lightweight PoC workflow for messy healthcare analytics: explore → analyze → normalize → build SELECT-only SQL → optional execute (only after asking permission) → return structured JSON. DO NOT create a new project; modify files in-place or add minimal new modules only under `backend/services` and `backend/routes`. Keep changes small and minimal. No Docker, no CI, no heavy test suites. Focus on a working PoC.
+You are my codebase analyst. I want you to scan the entire repo and generate a clear, structured summary of the codebase. This summary should cover:
 
-OBJECTIVE (high level)
-- Add a minimal orchestration that, given a user natural-language query and params, will:
-  1. Build a minimal exploratory SELECT (parameterized, <= preview_limit rows) from `rpt_report_fact` (fallback to `rpt_case_fact`).
-  2. Fetch the sample (if DB connection allowed) or propose the SQL if execution not permitted.
-  3. Analyze distinct values for relevant columns (display_value, sub_category, any _YN columns, test_site_yn): distinct value counts, top patterns (case, trailing spaces, numeric '0'/'1', comma-separated tokens, free-text labels).
-  4. Propose deterministic normalization rules (CASE expressions) — not just boolean, also multi-class diagnosis categories (LUNG_CANCER, ESOPHAGEAL_CANCER, BENIGN_TUMOR, NO_CANCER, OTHER, UNKNOWN).
-  5. Build a final SELECT-only SQL applying normalization and user's filters.
-  6. If asked, execute final SQL with safeguards (max rows/time), else return the SQL and execution plan suggestion.
-  7. Return a strict JSON object with keys: initial_sql, analysis, normalization_rules_sql, final_sql, results_preview (<=10 rows), aggregates, transformations, confidence (0.0–1.0), summary (<=3 sentences), notes.
+- Project structure (folders, files, layers)
+- Key technologies, frameworks, and libraries
+- Major modules and their responsibilities
+- Important functions, hooks, and utilities
+- Database models / schemas / migrations
+- API routes and how they connect to frontend
+- Common patterns or conventions (naming, architecture, state management, etc.)
+- Any repeated logic that should be abstracted
 
-CONSTRAINTS & RULES
-- **Do not** create a new top-level project. Modify only these locations in the existing repo: `backend/routes/ai.js`, `backend/services/` (add files if needed), `backend/config/` (modify env examples) and `backend/config/logger.js` if present.
-- Keep code minimal & readable. Use existing logging patterns in repo.
-- Use parameterized queries only. Do not build SQL by concatenating user strings.
-- Always validate SQL to be SELECT-only. Block non-SELECT requests.
-- If execution is requested and the query is potentially heavy (> max_execution_rows or no filters), ask permission via the agent/editor UI: return a message `requires_confirmation` with estimated cost (rows/time). Proceed only if `allow_heavy:true` provided in API request.
-- No Docker/CI/tests for now — only unit-level helper functions may have small inline tests if trivial.
-- Use Oracle dialect hints (ROWNUM). If repo uses other DB, auto-detect and use LIMIT/FETCH FIRST.
-- Integrate with your existing Azure OpenAI wrapper in project (if present). Use GPT-5-mini controls: reasoning_effort=high, verbosity=medium, preamble="Plan then act", temperature=0.15, max_tokens=1200. If no wrapper exists, add a minimal `backend/services/openaiWrapper.js` that calls Azure Responses API (stub with env placeholders).
+Format it in a way that is easy to reference later, like a living architecture doc.
 
-FILES TO CREATE / MODIFY (minimal list)
-1. `backend/routes/ai.js` — add/extend endpoints:
-   - POST `/ai/convert` — returns final_sql (no execution)
-   - POST `/ai/convert-and-execute` — orchestrates full flow; if execution required, ask for permission (requires `allow_execute:true`), otherwise only propose SQL and analysis.
-2. `backend/services/normalizer.js` — exports:
-   - `analyzeSample(rows)` → returns analysis object (distinct values, counts, patterns)
-   - `proposeNormalizationRules(analysis)` → returns rule objects + CASE SQL string
-   - `applyRulesToSQL(baseSQL, rules)` → returns final_sql with embedded CASEs or CTE
-3. `backend/services/dbClient.js` (if repo lacks a DB helper) or extend existing DB helper to add:
-   - `sampleQuery(sql, params, limit)` — runs parameterized sample with safe limit
-   - `executeSafe(sql, params, options)` — executes with timeout and row limit checks
-   - `explainQuery(sql, params)` — returns explain plan or estimate
-4. `backend/config/.env.example` — add `PREVIEW_LIMIT=500`, `MAX_EXECUTION_ROWS=100000`, `MAX_EXECUTION_TIME_MS=60000` placeholders.
-5. `backend/services/openaiWrapper.js` (minimal stub) — if existing OpenAI integration is present, adapt to support recommended model controls. If present, reuse it.
+Whenever I ask you again, update this summary based on new code changes instead of rewriting from scratch. Keep the context consistent and evolving.
 
-API CONTRACT (POST /ai/convert-and-execute request body)
-```json
-{
-  "user_nl": "string (user natural language request)",
-  "params": { "report_name": "string", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "preview_limit": 500 },
-  "options": { "dialect": "oracle|postgres|generic", "allow_execute": false, "allow_heavy": false }
-}
-RESPONSE (successful, JSON)
-
-{
-  "initial_sql": "string",
-  "analysis": [ { "column": "display_value", "distinct_values": [{ "value": "lung cancer", "count": 10, "pct": 0.5 }], "patterns_detected": ["numeric 0/1","comma-separated"] } ],
-  "normalization_rules_sql": "string (CASE expressions or CTE)",
-  "final_sql": "string",
-  "results_preview": [ { "norm_diag":"LUNG_CANCER", "cnt": 10 }, ... ],
-  "aggregates": { "total_rows": 200, "by_norm_diag": [{"norm_diag":"LUNG_CANCER","cnt":100}] },
-  "transformations": ["trim, lowercase, map 'y'->TRUE, '1'->TRUE"],
-  "confidence": 0.78,
-  "summary": "1-3 sentence brief insight",
-  "notes": "if needs permission: requires_confirmation with estimated rows/time"
-}
-
-OPERATIONAL BEHAVIOR
-
-On receiving request:
-
-1. Build initial_sql (parameterized) to sample up to preview_limit.
-
-
-2. If options.allow_execute is false, do not run queries — instead return initial_sql and final_sql with notes telling user to set allow_execute:true to run.
-
-
-3. If allow_execute:true, run sample via dbClient.sampleQuery. Use results to analyzeSample.
-
-
-4. Generate normalization CASE SQL via proposeNormalizationRules.
-
-
-5. Build final_sql via applyRulesToSQL.
-
-
-6. If final_sql likely returns > MAX_EXECUTION_ROWS or takes > MAX_EXECUTION_TIME_MS (use explainQuery), return requires_confirmation in notes with estimate; do NOT execute until allow_heavy:true supplied.
-
-
-7. If all safe and allow_execute:true, run dbClient.executeSafe and include results_preview (<=10 rows) and aggregates.
-
-
-
-Always validate that final_sql contains only SELECT, WITH, ORDER BY, GROUP BY, HAVING clauses; block others.
-
-
-MODEL/LLM USAGE
-
-Use GPT-5-mini only for:
-
-interpreting ambiguous NL intent to help choose columns/filters
-
-suggesting normalization heuristics
-
-
-The final normalization CASE SQL must be generated deterministically by normalizer.js code (not solely from the model). The model's suggestions can be used to augment but not replace programmatic rules.
-
-
-DEVELOPER NOTES FOR YOU (Cursor agent)
-
-Keep changes minimal and include clear inline comments where you added/modified code.
-
-If you cannot access the real Oracle DB in this environment, implement dbClient with a mock mode that returns plausible sample rows for development; expose a DB_MOCK=true env var for this PoC.
-
-At the end of the run, output a short patch summary listing modified and new files and exactly where to paste them into the repo.
-
-
-USER COOPERATION
-
-The user (hrishabh) will provide DB connection permission interactively in the code editor/agent UI. If permission is needed, ask via a structured response: { "requires_permission": true, "reason": "execute sample query", "estimated_rows": 500 }.
-
-
-NOW: Implement the minimal code changes described and at the end produce:
-
-1. A concise patch summary (modified files and new files with paths).
-
-
-2. The full contents of each new/modified file (so I can copy-paste into the existing repo).
-
-
-3. If DB access is not available, keep DB_MOCK mode enabled and generate realistic sample rows for analysis.
-
-
-4. A 3-line summary of how to test the PoC locally and how to grant permission to execute real DB queries.
-
-
-
-If any request conflicts with platform restrictions, explain exactly what cannot be done and provide the best safe alternative.
-
-USER: start now — produce the patch summary and file contents.
+Start by giving me the first complete snapshot of the current repo.
