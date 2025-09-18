@@ -1,0 +1,245 @@
+---
+description: How to add or edit Cursor rules in your project (React Edition)
+globs:
+alwaysApply: false
+---
+
+# Cursor Rules Management Guide (React)
+
+## Rule Structure Format
+
+Every cursor rule must follow this exact metadata and content structure:
+
+````markdown
+---
+description: Short description of the rule's purpose
+globs: optional/path/pattern/**/*
+alwaysApply: false
+---
+# Rule Title
+
+Main content explaining the rule with markdown formatting.
+
+1. Step-by-step instructions
+2. Code examples
+3. Guidelines
+
+Example:
+```jsx
+// ✅ Good
+function GoodComponent() {
+  return <div>Correct implementation</div>;
+}
+
+// ❌ Bad
+function BadComponent() {
+  return <div>{/* messy or incorrect implementation */}</div>;
+}
+
+---
+
+## File Organization
+
+### Required Location
+
+All cursor rule files **must** be placed in:
+
+```
+PROJECT_ROOT/.cursor/rules/
+```
+
+### Directory Structure
+
+```
+PROJECT_ROOT/
+├── .cursor/
+│   └── rules/
+│       ├── your-rule-name.mdc
+│       ├── another-rule.mdc
+│       └── cursor-rules.mdc
+└── ...
+```
+
+### Naming Conventions
+
+- Use **kebab-case** for all filenames  
+- Always use **.mdc** extension  
+- Make names **descriptive** of the rule's purpose  
+- Examples: `react-component-patterns.mdc`, `tailwind-styling.mdc`, `mdx-documentation.mdc`
+
+---
+
+## Content Guidelines
+
+### Writing Effective Rules
+
+1. **Be specific and actionable** - Provide clear instructions  
+2. **Include code examples** - Show both good and bad practices using React  
+3. **Reference existing files** - Use `@filename.ext` format  
+4. **Keep it focused** - One rule per concern/pattern  
+5. **Add context** - Explain why the rule exists  
+
+### Code Examples Format
+
+```jsx
+// ✅ Good: Clear functional component
+function UserCard({ user }) {
+  return (
+    <article>
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+    </article>
+  );
+}
+
+// ❌ Bad: burying logic inside JSX
+function UserCardBad({ user }) {
+  return (
+    <article>
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+      {user.isAdmin && (alert('admin detected'), <span>Admin</span>)}
+    </article>
+  );
+}
+```
+
+If your project uses TypeScript with React, prefer `.tsx` examples:
+
+```tsx
+type User = { id: string; name: string; email: string };
+
+function UserCard({ user }: { user: User }) {
+  return (
+    <article>
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+    </article>
+  );
+}
+```
+
+### File References
+
+When referencing project files in rules, use this pattern:
+
+```markdown
+[Component.tsx](mdc:path/to/Component.tsx)
+```
+
+---
+
+## Forbidden Locations
+
+**Never** place rule files in:
+- Project root directory  
+- Any subdirectory outside `.cursor/rules/`  
+- Component directories  
+- Source code folders  
+- Documentation folders  
+
+---
+
+## Rule Categories
+
+Organize rules by purpose:
+- **UI Patterns**: `react-component-patterns.mdc`, `hooks-guidelines.mdc`  
+- **Styling**: `tailwind-styling.mdc`, `css-modules.mdc`  
+- **Architecture**: `component-structure.mdc`, `folder-structure.mdc`  
+- **Documentation**: `mdx-documentation.mdc`, `readme-format.mdc`  
+- **Tools**: `testing-patterns.mdc`, `build-config.mdc`  
+- **Meta**: `cursor-rules.mdc`, `self-improve.mdc`  
+
+---
+
+## Best Practices
+
+### Rule Creation Checklist
+
+- [ ] File placed in `.cursor/rules/` directory  
+- [ ] Filename uses kebab-case with `.mdc` extension  
+- [ ] Includes proper metadata section  
+- [ ] Contains clear title and sections  
+- [ ] Provides both good and bad examples using React  
+- [ ] References relevant project files  
+- [ ] Follows consistent formatting  
+
+### Maintenance
+
+- **Review regularly** - Keep rules up to date with codebase changes  
+- **Update examples** - Ensure code samples reflect current patterns  
+- **Cross-reference** - Link related rules together  
+- **Document changes** - Update rules when patterns evolve  
+
+---
+
+## Quick React Example Patterns
+
+### Functional component best practice
+
+```jsx
+function Button({ children, onClick }) {
+  return (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+```
+
+### Avoid prop drilling (use context/hooks)
+
+```jsx
+// ❌ Bad
+function A({ user }) { return <B user={user} />; }
+function B({ user }) { return <C user={user} />; }
+function C({ user }) { return <div>{user.name}</div>; }
+
+// ✅ Better
+const UserContext = React.createContext(null);
+
+function App() {
+  const user = { name: 'Maya' };
+  return (
+    <UserContext.Provider value={user}>
+      <DeepChild />
+    </UserContext.Provider>
+  );
+}
+
+function DeepChild() {
+  const user = React.useContext(UserContext);
+  return <div>{user.name}</div>;
+}
+```
+
+### Accessibility reminder
+
+```jsx
+function Search() {
+  return (
+    <label htmlFor="search-input">
+      Search
+      <input id="search-input" placeholder="Search..." />
+    </label>
+  );
+}
+```
+
+### Avoid inline heavy computations in render
+
+```jsx
+// ❌ Bad
+function Scores({ scores }) {
+  return <div>{scores.map(s => expensiveCalc(s)).join(',')}</div>;
+}
+
+// ✅ Good
+function Scores({ scores }) {
+  const list = React.useMemo(() => scores.map(s => expensiveCalc(s)), [scores]);
+  return <div>{list.join(',')}</div>;
+}
+```
+```
+
+---
