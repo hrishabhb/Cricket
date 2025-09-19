@@ -1,14 +1,11 @@
-SELECT
-    cf.patient_id,
-    cf.patient_name,
-    cf.facility_id,
-    MAX(CASE 
-          WHEN UPPER(TRIM(rf.sub_category)) = 'RACE' 
-          THEN rf.display_value 
-        END) AS race
+SELECT cf.patient_id,
+       cf.facility_id,
+       rf.calculation_id,
+       rf.sub_category,
+       rf.display_value
 FROM rpt_case_fact cf
 JOIN rpt_report_fact rf
   ON cf.calculation_id = rf.calculation_id
-WHERE rf.display_value IS NOT NULL
-GROUP BY cf.patient_id, cf.patient_name, cf.facility_id
-ORDER BY cf.patient_id;
+WHERE UPPER(TRIM(rf.sub_category)) = 'RACE'
+  AND rf.display_value IS NOT NULL
+FETCH FIRST 20 ROWS ONLY;
