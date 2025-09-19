@@ -1,16 +1,21 @@
-You are my codebase analyst. I want you to scan the entire repo and generate a clear, structured summary of the codebase. This summary should cover:
-
-- Project structure (folders, files, layers)
-- Key technologies, frameworks, and libraries
-- Major modules and their responsibilities
-- Important functions, hooks, and utilities
-- Database models / schemas / migrations
-- API routes and how they connect to frontend
-- Common patterns or conventions (naming, architecture, state management, etc.)
-- Any repeated logic that should be abstracted
-
-Format it in a way that is easy to reference later, like a living architecture doc.
-
-Whenever I ask you again, update this summary based on new code changes instead of rewriting from scratch. Keep the context consistent and evolving.
-
-Start by giving me the first complete snapshot of the current repo.
+SELECT *
+FROM (
+    SELECT
+        cf.patient_id,
+        cf.patient_name,
+        cf.facility_id,
+        rf.sub_category,
+        rf.display_value
+    FROM case_fact cf
+    JOIN report_fact rf
+      ON cf.calculation_id = rf.calculation_id
+) 
+PIVOT (
+    MAX(display_value)
+    FOR sub_category IN (
+        'Age'    AS age,
+        'Gender' AS gender,
+        'Race'   AS race
+    )
+)
+ORDER BY patient_id;
