@@ -1,10 +1,11 @@
 SELECT
-  cf.patient_id,
-  cf.patient_name,
-  cf.facility_id,
-  MAX(CASE WHEN UPPER(TRIM(rf.sub_category)) = 'AGE'    THEN rf.display_value END) AS age,
-  MAX(CASE WHEN UPPER(TRIM(rf.sub_category)) = 'GENDER' THEN rf.display_value END) AS gender,
-  MAX(CASE WHEN UPPER(TRIM(rf.sub_category)) = 'RACE'   THEN rf.display_value END) AS race
+    cf.patient_id,
+    cf.patient_name,
+    cf.facility_id,
+    MAX(CASE 
+          WHEN UPPER(TRIM(rf.sub_category)) = 'RACE' 
+          THEN rf.display_value 
+        END) AS race
 FROM rpt_case_fact cf
 JOIN rpt_report_fact rf
   ON cf.calculation_id = rf.calculation_id
