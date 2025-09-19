@@ -1,11 +1,12 @@
 SELECT cf.patient_id,
+       cf.patient_name,
        cf.facility_id,
        rf.calculation_id,
        rf.sub_category,
-       rf.display_value
+       '"' || rf.display_value || '"' AS raw_display_value,
+       LENGTH(rf.display_value) AS len_display_value
 FROM rpt_case_fact cf
 JOIN rpt_report_fact rf
   ON cf.calculation_id = rf.calculation_id
 WHERE UPPER(TRIM(rf.sub_category)) = 'RACE'
-  AND rf.display_value IS NOT NULL
-FETCH FIRST 20 ROWS ONLY;
+FETCH FIRST 100 ROWS ONLY;
