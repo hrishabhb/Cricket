@@ -1,11 +1,644 @@
-import csv
+const OpenAI = require('openai');
+const aiLogger = require('../config/aiLogger');
+const SchemaManager = require('./SchemaManager');
+require('dotenv').config();
 
-with open("subcats.csv") as f:
-    reader = csv.reader(f)
-    subcats = [row[0].strip() for row in reader]
+class AzureOpenAIService {
+  constructor() {
+    console.log('🔵 Initializing Azure OpenAI service...');
+    
+    // Validate required environment variables
+    this.validateEnvironment();
+    
+    // Initialize schema manager with real extracted schemas
+    this.schemaManager = new SchemaManager(true); // Skip hardcoded initialization
+    this.loadRealSchemas(); // Load asynchronously
+    
+    // Set up Azure OpenAI client
+      const azureEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+    const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2024-05-01-preview';
+    
+    // Construct proper base URL for Azure OpenAI
+    const baseURL = `${azureEndpoint}/openai/v1/`;
+      
+      this.client = new OpenAI({
+        baseURL: baseURL,
+      apiKey: process.env.AZURE_OPENAI_API_KEY,
+        defaultHeaders: {
+        'api-key': process.env.AZURE_OPENAI_API_KEY
+        },
+        defaultQuery: { 
+        'api-version': apiVersion 
+        }
+      });
+      
+      this.model = process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-5-mini';
+    this.maxTokens = parseInt(process.env.AZURE_OPENAI_MAX_TOKENS) || 5000;
+    this.reasoningEffort = process.env.AZURE_OPENAI_REASONING_EFFORT || 'minimal';
+    this.verbosity = process.env.AZURE_OPENAI_VERBOSITY || 'medium';
+    
+    console.log('✅ Azure OpenAI client initialized:', {
+      endpoint: azureEndpoint,
+      deployment: this.model,
+      maxTokens: this.maxTokens,
+      reasoningEffort: this.reasoningEffort,
+      verbosity: this.verbosity,
+      apiVersion: apiVersion
+    });
+  }
 
-for sub in subcats:
-    alias = sub.lower().replace(" ", "_")  # simple aliasing
-    print(f"    LISTAGG(CASE WHEN UPPER(TRIM(rf.sub_category)) = '{sub.upper()}' "
-          f"THEN rf.display_value END, ', ') "
-          f"WITHIN GROUP (ORDER BY rf.display_value) AS {alias},")
+  /**
+   * Validate required environment variables
+   */
+  validateEnvironment() {
+    const required = [
+      'AZURE_OPENAI_ENDPOINT',
+      'AZURE_OPENAI_API_KEY',
+      'AZURE_OPENAI_DEPLOYMENT'
+    ];
+
+    const missing = required.filter(key => !process.env[key]);
+    
+    if (missing.length > 0) {
+      const error = `Missing required Azure OpenAI environment variables: ${missing.join(', ')}`;
+      console.error('❌ Configuration Error:', error);
+      throw new Error(error);
+    }
+  }
+
+  /**
+   * Generate SQL query from natural language question
+   * @param {string} question - Natural language question
+   * @param {string} schema - Compact database schema (deprecated - use contextPayload)
+   * @param {Object} contextPayload - New structured context payload
+   * @returns {Promise<{sql: string, explanation: string}>}
+   */
+  async generateSQL(question, schema = null, contextPayload = null) {
+    const requestId = Math.random().toString(36).substr(2, 9);
+    const startTime = Date.now();
+    
+    console.log(`🤖 [${requestId}] Generating SQL for question:`, question.substring(0, 100) + '...');
+    
+    if (contextPayload) {
+      console.log(`🎯 [${requestId}] Using new context payload structure`);
+    } else if (schema) {
+      console.log(`📊 [${requestId}] Using legacy schema, length:`, schema.length, 'characters');
+    } else {
+      console.log(`⚠️ [${requestId}] No context provided - using minimal context`);
+    }
+
+    if (!this.client) {
+      const error = new Error('Azure OpenAI client not properly initialized. Check environment variables.');
+      await aiLogger.logAIError(requestId, error, { question, contextPayload, schema });
+      throw error;
+    }
+
+    const systemPrompt = this.buildSystemPrompt(schema, contextPayload);
+    const userPrompt = this.buildUserPrompt(question, contextPayload);
+
+    // Log the input text for audit
+    await aiLogger.logContext(requestId, {
+      question,
+      contextPayload,
+      systemPromptLength: systemPrompt.length,
+      userPromptLength: userPrompt.length,
+      inputText: {
+        systemPrompt: systemPrompt,
+        userPrompt: userPrompt
+      }
+    });
+
+    try {
+      console.log(`🚀 [${requestId}] Making Azure OpenAI API request...`);
+      
+      // Prepare Azure OpenAI specific request parameters
+      const requestParams = {
+        model: this.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        max_completion_tokens: this.maxTokens,
+        reasoning_effort: this.reasoningEffort,
+        verbosity: this.verbosity,
+        // Note: GPT-5 Mini only supports default temperature (1), custom values not allowed
+        response_format: { type: "text" } // Ensure text response for JSON parsing
+      };
+
+      console.log(`📋 [${requestId}] Azure OpenAI request parameters:`, {
+        model: requestParams.model,
+        maxCompletionTokens: requestParams.max_completion_tokens,
+        reasoningEffort: requestParams.reasoning_effort,
+        verbosity: requestParams.verbosity,
+        temperature: 'default (1.0)', // GPT-5 Mini only supports default
+        systemPromptLength: systemPrompt.length,
+        userPromptLength: userPrompt.length
+      });
+
+      // Log the AI request
+      await aiLogger.logAIRequest(requestId, requestParams, 'azure', this.model);
+
+      const response = await this.client.chat.completions.create(requestParams);
+
+      const processingTime = Date.now() - startTime;
+
+      // Log the AI response
+      await aiLogger.logAIResponse(requestId, response, processingTime);
+
+      console.log(`✅ [${requestId}] OpenAI API response received`);
+      console.log(`📊 [${requestId}] Usage:`, response.usage);
+
+      const choice = response.choices?.[0];
+      const finishReason = choice?.finish_reason;
+      console.log(`🧾 [${requestId}] Finish reason:`, finishReason);
+
+      let content = choice?.message?.content || '';
+
+      // Fallback: if content empty, try function/tool call arguments (defensive)
+      if (!content && choice?.message?.tool_calls?.length) {
+        try {
+          const args = choice.message.tool_calls[0]?.function?.arguments;
+          if (typeof args === 'string' && args.trim().length > 0) {
+            content = args;
+          }
+        } catch (_) {}
+      }
+
+      if (!content || !content.trim()) {
+        throw new Error(`No response content from OpenAI (finish_reason=${finishReason || 'unknown'})`);
+      }
+
+      // Handle length truncation case
+      if (finishReason === 'length') {
+        console.warn('⚠️  Response was truncated due to length limit. Attempting to extract partial content.');
+        // For length truncation, try to extract whatever SQL we got
+        if (content.length > 50 && content.includes('SELECT')) {
+          console.log('🔄 Attempting to extract SQL from truncated response...');
+        } else {
+          throw new Error('Response truncated and insufficient content to extract SQL. Try increasing OPENAI_MAX_TOKENS.');
+        }
+      }
+
+      let parsedResponse;
+      try {
+        parsedResponse = JSON.parse(content);
+      } catch (parseError) {
+        console.warn('⚠️  AI response was not valid JSON. Attempting to extract SQL heuristically.');
+        // Heuristic extraction of SQL and explanation from text
+        let extractedSQL = '';
+        let explanationText = '';
+
+        // Try to find a code block first
+        const codeBlockMatch = content.match(/```sql\n?([\s\S]*?)```/i) || content.match(/```\n?([\s\S]*?)```/i);
+        if (codeBlockMatch) {
+          extractedSQL = codeBlockMatch[1].trim();
+        }
+
+        // If still not found, try to find a JSON-like sql field
+        if (!extractedSQL) {
+          const jsonSqlMatch = content.match(/"sql"\s*:\s*"([\s\S]*?)"/i);
+          if (jsonSqlMatch) {
+            extractedSQL = jsonSqlMatch[1]
+              .replace(/\\n/g, '\n')
+              .replace(/\\"/g, '"')
+              .trim();
+          }
+        }
+
+        // As a last resort, pull first SELECT ...
+        if (!extractedSQL) {
+          const selectIdx = content.toUpperCase().indexOf('SELECT');
+          if (selectIdx !== -1) {
+            extractedSQL = content.slice(selectIdx).trim();
+          }
+        }
+
+        // Explanation heuristic
+        const explMatch = content.match(/"explanation"\s*:\s*"([\s\S]*?)"/i);
+        if (explMatch) {
+          explanationText = explMatch[1].replace(/\\n/g, ' ').replace(/\\"/g, '"').trim();
+        }
+
+        if (!extractedSQL) {
+          console.error('❌ Failed to extract SQL from AI response:', content);
+          throw new Error('AI did not return parsable SQL content');
+        }
+
+        parsedResponse = { sql: extractedSQL, explanation: explanationText };
+      }
+
+      // Validate and clean the response
+      const sql = this.validateAndCleanSQL(parsedResponse.sql || parsedResponse.query);
+      const explanation = parsedResponse.explanation || parsedResponse.description || 'SQL query generated successfully';
+
+      console.log('✅ Generated SQL:', sql.substring(0, 200) + '...');
+      
+      return {
+        sql,
+        explanation,
+        tokens_used: response.usage?.total_tokens || 0
+      };
+
+    } catch (error) {
+      console.error(`❌ [${requestId}] Azure OpenAI API error:`, error);
+      
+      // Log the error with full details
+      await aiLogger.logAIError(requestId, error, { 
+        question, 
+        contextPayload, 
+        schema,
+        systemPromptLength: systemPrompt?.length,
+        userPromptLength: userPrompt?.length 
+      });
+      
+      // Enhanced error handling for Azure OpenAI
+      let errorMessage = 'Azure OpenAI service error';
+      
+      if (error.status) {
+        switch (error.status) {
+          case 400:
+            errorMessage = `Bad Request: ${error.message || 'Invalid request parameters'}`;
+            break;
+          case 401:
+            errorMessage = 'Authentication failed: Invalid Azure OpenAI API key or expired credentials';
+            break;
+          case 403:
+            errorMessage = 'Access forbidden: Check your Azure OpenAI resource permissions';
+            break;
+          case 404:
+            errorMessage = `Model not found: Deployment '${this.model}' not available in your Azure OpenAI resource`;
+            break;
+          case 429:
+            errorMessage = 'Rate limit exceeded: Too many requests to Azure OpenAI service';
+            break;
+          case 500:
+            errorMessage = 'Azure OpenAI service internal error: Please try again later';
+            break;
+          case 502:
+          case 503:
+          case 504:
+            errorMessage = 'Azure OpenAI service temporarily unavailable: Please try again later';
+            break;
+          default:
+            errorMessage = `Azure OpenAI API error (${error.status}): ${error.message || 'Unknown error'}`;
+        }
+      } else if (error.code) {
+        switch (error.code) {
+          case 'ENOTFOUND':
+          case 'ECONNREFUSED':
+            errorMessage = 'Network error: Cannot connect to Azure OpenAI service. Check your endpoint URL.';
+            break;
+          case 'ETIMEDOUT':
+            errorMessage = 'Request timeout: Azure OpenAI service took too long to respond';
+            break;
+          case 'insufficient_quota':
+            errorMessage = 'Azure OpenAI quota exceeded: Please check your usage limits and billing';
+            break;
+          case 'invalid_api_key':
+            errorMessage = 'Invalid Azure OpenAI API key: Please verify your credentials';
+            break;
+          case 'model_not_found':
+            errorMessage = `Model deployment '${this.model}' not found in your Azure OpenAI resource`;
+            break;
+          case 'content_filter':
+            errorMessage = 'Content filtered: The request or response was blocked by Azure content filters';
+            break;
+          default:
+            errorMessage = `Azure OpenAI error (${error.code}): ${error.message || 'Unknown error'}`;
+        }
+      } else {
+        // Generic error handling
+        errorMessage = `Azure OpenAI service error: ${error.message || 'An unexpected error occurred'}`;
+      }
+      
+      // Log the processed error message
+      console.error(`🔍 [${requestId}] Processed error message:`, errorMessage);
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Build system prompt with schema and instructions
+   * @param {string} schema - Database schema (legacy)
+   * @param {Object} contextPayload - New structured context payload
+   * @returns {string} System prompt
+   */
+  buildSystemPrompt(schema = null, contextPayload = null) {
+    let contextSection = '';
+    
+    if (contextPayload) {
+      // Use new structured context
+      contextSection = this.buildContextSection(contextPayload);
+    } else if (schema) {
+      // Use legacy schema
+      contextSection = `DATABASE SCHEMA:
+${schema}`;
+    } else {
+      // Minimal fallback
+      contextSection = `DATABASE CONTEXT:
+No specific schema provided. Use common healthcare database patterns.
+Common tables: FACILITY, FORM, FIELD,ACCOUNT,HEALTH_SYSTEM,RPT_CALCULATIONS, RPT_REPORT_FACT, RPT_CASE_FACT, RPT_CASE_MISS_FACT`;
+    }
+
+    return `You are an expert Oracle SQL generator for a healthcare database system.
+
+${contextSection}
+
+STRICT REQUIREMENTS:
+1. Generate ONLY SELECT statements (no INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, etc.)
+2. Use Oracle SQL syntax (SYSDATE, TO_CHAR, TO_DATE, etc.)
+3. For date operations, use Oracle functions like ADD_MONTHS, TRUNC, etc.
+4. Always provide proper column aliases for aggregations
+5. Use proper JOIN syntax when joining tables
+6. Validate table and column names exist in the provided context
+7. If you are not 100% sure about a table or column from the provided context, DO NOT INVENT. Explain the limitation instead.
+8. Prefer the simplest query that answers the question accurately.
+9. Follow any specific fetch instructions provided for tables
+10. Apply join rules as specified in the context if necessary
+11. Consider all additional hints provided
+
+HEALTHCARE DATA ANALYSIS RULES:
+
+1. PATIENT COUNTING & DEDUPLICATION:
+   - ALWAYS use DISTINCT when counting patients: COUNT(DISTINCT PATIENT_ID)
+   - RPT_CASE_FACT can have multiple records per patient (different forms, dates, facilities)
+   - When asked for "patients with X", count unique patients only
+   - Primary key FORM_RECORD_ID is unique per form submission, not per patient
+
+2. MEDICAL CONDITION CODING:
+   - Medical condition columns (LUNGCANCER, ESOPHCANCER, etc.) use coded values:
+     * '1' = Yes/Present (patient HAS the condition)
+     * '0' = No/Absent (patient does NOT have the condition)
+     * NULL = Unknown/Not recorded
+   - For patients WITH condition: WHERE column_name = '1'
+   - For patients WITHOUT condition: WHERE column_name = '0'
+   - For ALL patients with known status: WHERE column_name IN ('0', '1')
+   - NEVER use TRIM(), IS NOT NULL, or <> '' for medical condition columns
+
+3. BOOLEAN COLUMN HANDLING:
+   - Columns ending with _YN are CHAR(4) fields that use Yes/No values with potential trailing spaces:
+     * 'Y' = Yes/True (condition is present/active) - may be stored as 'Y   ' with spaces
+     * 'N' = No/False (condition is not present/inactive) - may be stored as 'N   ' with spaces
+     * NULL = Unknown/Not recorded
+   - ALWAYS use TRIM() function for _YN columns to handle trailing spaces:
+     * For records WHERE condition is true: WHERE TRIM(column_name) = 'Y'
+     * For records WHERE condition is false: WHERE TRIM(column_name) = 'N'
+     * For ALL records with known status: WHERE TRIM(column_name) IN ('Y', 'N')
+   - Alternative robust approach: WHERE column_name IN ('Y', 'Y   ', 'y', 'y   ')
+   - Examples: ACTIVE_YN, TEST_SITE_YN, HEALTH_SYSTEM_YN, CRM_SYNC_YN, ADMIN_YN, PATIENT_YN
+   - ALWAYS check column names for _YN suffix and use TRIM() with 'Y'/'N' values
+
+4. DATE HANDLING:
+   - FORM_PRIMARY_DT is the primary date for case records
+   - Use TO_CHAR(date_column, 'YYYY-MM-DD') for date formatting
+   - For date ranges, use BETWEEN or >= AND <=
+   - Consider TRUNC() for date-only comparisons
+
+5. FACILITY & PATIENT RELATIONSHIPS:
+   - FACILITY_ID links to FACILITY table for facility information
+   - PATIENT_ID is the unique patient identifier
+   - PATIENT_DISPLAY_ID is the human-readable patient ID
+   - Always consider facility context for patient counts
+
+6. AGGREGATION BEST PRACTICES:
+   - When counting patients: COUNT(DISTINCT PATIENT_ID)
+   - When counting forms/records: COUNT(*) or COUNT(FORM_RECORD_ID)
+   - When counting facilities: COUNT(DISTINCT FACILITY_ID)
+   - Group by facility when analyzing across multiple facilities
+
+7. COMMON QUERY PATTERNS:
+   - Patient counts by condition: SELECT COUNT(DISTINCT PATIENT_ID) WHERE condition = '1'
+   - Facility-wise patient counts: GROUP BY FACILITY_ID
+   - Time-based analysis: GROUP BY TRUNC(FORM_PRIMARY_DT, 'MM') for monthly
+   - Cross-tabulation: Use CASE statements for condition comparisons
+
+8. QUERY EXAMPLES:
+   ❌ WRONG: SELECT COUNT(*) FROM RPT_CASE_FACT WHERE LUNGCANCER IS NOT NULL
+   ✅ CORRECT: SELECT COUNT(DISTINCT PATIENT_ID) FROM RPT_CASE_FACT WHERE LUNGCANCER = '1'
+   
+   ❌ WRONG: SELECT PATIENT_ID FROM RPT_CASE_FACT WHERE LUNGCANCER = '1'
+   ✅ CORRECT: SELECT DISTINCT PATIENT_ID FROM RPT_CASE_FACT WHERE LUNGCANCER = '1'
+   
+   ❌ WRONG: WHERE TRIM(LUNGCANCER) <> ''
+   ✅ CORRECT: WHERE LUNGCANCER = '1'
+   
+   ❌ WRONG: WHERE ACTIVE_YN = 1 OR ACTIVE_YN = TRUE
+   ✅ CORRECT: WHERE TRIM(ACTIVE_YN) = 'Y'
+   
+   ❌ WRONG: WHERE TEST_SITE_YN = 0 OR TEST_SITE_YN = FALSE
+   ✅ CORRECT: WHERE TRIM(TEST_SITE_YN) = 'N'
+   
+   ❌ WRONG: WHERE ACTIVE_YN = 'Y' AND TEST_SITE_YN = 'N' (may fail due to trailing spaces)
+   ✅ CORRECT: WHERE TRIM(ACTIVE_YN) = 'Y' AND TRIM(TEST_SITE_YN) = 'N'
+
+RESPONSE FORMAT:
+Return a JSON object with:
+{
+  "sql": "SELECT statement here",
+  "explanation": "Brief explanation of what the query does"
+}
+
+SECURITY NOTES:
+- Never generate destructive operations
+- Validate all table/column references against the provided context
+- If a question asks for something not possible with the context, explain why
+
+Remember: This is a production healthcare system. Safety and data protection are paramount.`;
+  }
+
+  /**
+   * Build context section from structured context payload
+   * @param {Object} contextPayload - Structured context payload
+   * @returns {string} Formatted context section
+   */
+  buildContextSection(contextPayload) {
+    let contextSection = 'DATABASE CONTEXT:\n\n';
+    
+    // Generate schema details for important tables
+    if (contextPayload.importantTables && contextPayload.importantTables.length > 0) {
+      contextSection += `AVAILABLE TABLES WITH SCHEMA DETAILS:\n`;
+      contextSection += this.generateSchemaDetails(contextPayload.importantTables);
+      contextSection += '\n';
+    }
+    
+    // Fetch instructions
+    if (contextPayload.fetchInstructions && Object.keys(contextPayload.fetchInstructions).length > 0) {
+      contextSection += `TABLE-SPECIFIC FETCH INSTRUCTIONS:\n`;
+      Object.entries(contextPayload.fetchInstructions).forEach(([table, instruction]) => {
+        contextSection += `- ${table}: ${instruction}\n`;
+      });
+      contextSection += '\n';
+    }
+    
+    // Join logic
+    if (contextPayload.joinLogic && contextPayload.joinLogic.length > 0) {
+      contextSection += `RELATIONSHIP RULES:\n`;
+      contextPayload.joinLogic.forEach((rule, index) => {
+        contextSection += `${index + 1}. ${rule}\n`;
+      });
+      contextSection += '\n';
+    }
+    
+    // Additional hints
+    if (contextPayload.additionalHints && contextPayload.additionalHints.length > 0) {
+      contextSection += `QUERY OPTIMIZATION HINTS:\n`;
+      contextPayload.additionalHints.forEach((hint, index) => {
+        contextSection += `${index + 1}. ${hint}\n`;
+      });
+      contextSection += '\n';
+    }
+    
+    return contextSection;
+  }
+
+  /**
+   * Generate schema details for important tables using SchemaManager
+   * @param {string[]} importantTables - Array of table names
+   * @returns {string} Generated schema details
+   */
+  generateSchemaDetails(importantTables) {
+    if (!importantTables || importantTables.length === 0) {
+      return 'No table schema information available.';
+    }
+
+    // Use SchemaManager to get detailed schema information
+    return this.schemaManager.generateAISchemaDescription(importantTables);
+  }
+
+  /**
+   * Load real extracted schemas from JSON file
+   * @private
+   */
+  async loadRealSchemas() {
+    try {
+      const path = require('path');
+      const schemasPath = path.join(__dirname, '../extracted_schemas.json');
+      await this.schemaManager.loadSchemasFromFile(schemasPath);
+      console.log('✅ Real database schemas loaded successfully');
+    } catch (error) {
+      console.warn('⚠️  Could not load extracted schemas, falling back to hardcoded ones:', error.message);
+      // Fallback to hardcoded schemas
+      this.schemaManager = new SchemaManager(false);
+    }
+  }
+
+  // Removed getTableSchemaDetails method - now using SchemaManager
+
+  /**
+   * Build user prompt from natural language question
+   * @param {string} question - User question
+   * @param {Object} contextPayload - Context payload for additional context
+   * @returns {string} User prompt
+   */
+  buildUserPrompt(question, contextPayload = null) {
+    let prompt = `Convert this natural language question to Oracle SQL:
+
+"${question}"
+
+Requirements:
+- Use exact table and column names from the provided context
+- Include appropriate WHERE clauses if time periods are mentioned
+- Group and order results logically
+- Return complete result sets without artificial limits
+- Return response as JSON with "sql" and "explanation" fields`;
+
+    if (contextPayload) {
+      prompt += `
+- Follow any table-specific fetch instructions provided
+- Apply the specified join rules when joining tables
+- Consider all additional hints provided in the context`;
+    }
+
+    return prompt;
+  }
+
+  /**
+   * Validate and clean generated SQL
+   * @param {string} sql - Generated SQL
+   * @returns {string} Cleaned SQL
+   */
+  validateAndCleanSQL(sql) {
+    if (!sql || typeof sql !== 'string') {
+      throw new Error('Invalid SQL generated by AI');
+    }
+
+    // Clean up the SQL
+    let cleanSQL = sql.trim();
+    
+    // Remove code block markers if present
+    cleanSQL = cleanSQL.replace(/^```sql\n?/, '').replace(/\n?```$/, '');
+    cleanSQL = cleanSQL.replace(/^```\n?/, '').replace(/\n?```$/, '');
+    
+    // Validate it starts with SELECT
+    const upperSQL = cleanSQL.toUpperCase();
+    if (!upperSQL.startsWith('SELECT')) {
+      throw new Error('Generated query must be a SELECT statement');
+    }
+
+    // Check for dangerous keywords
+    const dangerousKeywords = [
+      'INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 
+      'TRUNCATE', 'EXEC', 'EXECUTE', 'MERGE', 'UPSERT'
+    ];
+    
+    for (const keyword of dangerousKeywords) {
+      const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+      if (regex.test(cleanSQL)) {
+        throw new Error(`Dangerous keyword '${keyword}' detected in generated SQL`);
+      }
+    }
+
+    // No automatic row limits - return complete result sets
+
+    return cleanSQL;
+  }
+
+  /**
+   * Test the Azure OpenAI connection
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async testConnection() {
+    try {
+      console.log('🧪 Testing Azure OpenAI connection...');
+      
+      const testParams = {
+        model: this.model,
+        messages: [
+          { role: "user", content: "Test connection. Respond with just: OK" }
+        ],
+        max_completion_tokens: 10,
+        reasoning_effort: 'minimal'
+        // Note: GPT-5 Mini only supports default temperature, no custom values
+      };
+
+      const response = await this.client.chat.completions.create(testParams);
+
+      const content = response.choices[0]?.message?.content;
+      console.log('✅ Azure OpenAI connection test successful:', content);
+      
+      return {
+        success: true,
+        message: `Connection successful. Model: ${this.model}, Response: ${content}`
+      };
+    } catch (error) {
+      console.error('❌ Azure OpenAI connection test failed:', error);
+      
+      let errorMessage = 'Connection test failed';
+      if (error.status) {
+        errorMessage = `Connection failed (${error.status}): ${error.message || 'Unknown error'}`;
+      } else if (error.code) {
+        errorMessage = `Connection failed (${error.code}): ${error.message || 'Network error'}`;
+      } else {
+        errorMessage = `Connection failed: ${error.message || 'Unknown error'}`;
+      }
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  }
+}
+
+module.exports = new AzureOpenAIService();
