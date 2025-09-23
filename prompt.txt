@@ -1,17 +1,23 @@
-SELECT c.patient_id,
-       c.facility_id,
-       c.form_record_id,
-       '{' ||
-       LISTAGG(
-         '"' || r.sub_category || '":"' || r.display_value || '"',
-         ','
-       ) WITHIN GROUP (ORDER BY r.sub_category)
-       || '}' AS subcategory_json
+SELECT
+  c.patient_id,
+  c.facility_id,
+  c.form_record_id,
+  '{' ||
+  RTRIM(
+    XMLCAST(
+      XMLAGG(
+        XMLELEMENT(
+          e,
+          '"' || REPLACE(r.sub_category, '"', '""') || '":"' ||
+          REPLACE(NVL(r.display_value, ''), '"', '""') || '",'
+        ) ORDER BY r.sub_category
+      ) AS CLOB
+    ),
+  ',') || '}' AS subcategory_json_clob
 FROM rpt_case_fact c
 JOIN rpt_report_fact r
   ON c.calculation_id = r.calculation_id
 WHERE r.sub_category IN (
-  SELECT column_value
-  FROM CSV_TABLE -- load your subcat.csv into a staging table or external table
+  SELECT sub_category FROM subcat_list       -- your imported CSV table
 )
 GROUP BY c.patient_id, c.facility_id, c.form_record_id;
