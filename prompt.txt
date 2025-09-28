@@ -1,23 +1,138 @@
-SELECT
-  c.patient_id,
-  c.facility_id,
-  c.form_record_id,
-  '{' ||
-  RTRIM(
-    XMLCAST(
-      XMLAGG(
-        XMLELEMENT(
-          e,
-          '"' || REPLACE(r.sub_category, '"', '""') || '":"' ||
-          REPLACE(NVL(r.display_value, ''), '"', '""') || '",'
-        ) ORDER BY r.sub_category
-      ) AS CLOB
-    ),
-  ',') || '}' AS subcategory_json_clob
-FROM rpt_case_fact c
-JOIN rpt_report_fact r
-  ON c.calculation_id = r.calculation_id
-WHERE r.sub_category IN (
-  SELECT sub_category FROM subcat_list       -- your imported CSV table
-)
-GROUP BY c.patient_id, c.facility_id, c.form_record_id;
+🏆 IRP-MeasureMind: AI-Powered Healthcare Analytics
+3-Minute VP Screen Recording Presentation Script
+🎯 OPENING HOOK (0:00 - 0:20)
+Screen Action: Show application landing page with medical cross logo
+Voice-Over Script:
+"Good morning! Imagine if your healthcare data could speak to you in plain English. What if doctors and researchers could get instant insights without waiting weeks for IT reports? Today, I'm presenting IRP-MeasureMind - the AI solution that's revolutionizing how we analyze healthcare data."
+
+Screen Choreography:
+Start with clean browser showing the landing page
+Slowly scroll to show the professional medical design
+Highlight the "AI Assistant" mode toggle
+💡 THE PROBLEM (0:20 - 0:40)
+Screen Action: Open a text editor showing complex SQL code
+Voice-Over Script:
+"Let me paint the real picture. A client asks us for a data export - maybe patient trends by diagnosis. But here's the reality: we don't have every possible report pre-built. So what happens? They submit an IT request. Our developers - who are already loaded with release work - need to write complex SQL scripts. But wait, before that, we need to refresh the database to get accurate results. This entire process? It can take up to a week, sometimes more."
+
+Screen Choreography:
+Show the complex SQL query (COMPLEX_SQL_EXAMPLE.sql)
+Scroll through the intimidating 50+ lines of code slowly
+Highlight the complexity: CTEs, window functions, date calculations
+Close the SQL editor to show the contrast with our solution
+⚡ THE SOLUTION REVEAL (0:40 - 1:20)
+Screen Action: Switch to IRP-MeasureMind interface
+Voice-Over Script:
+"IRP-MeasureMind eliminates this bottleneck completely. Watch this transformation..."
+
+Live Demo Sequence:
+Click in text area: "Instead of complex SQL, users simply type natural language..."
+Type slowly: "Give me count of patients with lung cancer and esophageal cancer by month for the past 2 years for bar graphs"
+Click "Analyze & Visualize": "Now, you might be thinking - AI in healthcare data? Sounds like a HIPAA violation, right? But here's the key: we're NOT exposing any patient data to the AI. The AI only generates the SQL script, which then executes on our secure servers. We've implemented every security measure required."
+Show progress animation: "Watch the AI work in real-time - analyzing, generating, executing..."
+Results appear: "And delivers beautiful, interactive visualizations in seconds, not weeks!"
+Screen Choreography:
+Type at moderate pace (readable but not slow)
+Let the progress bar animation play fully
+Pause briefly when results appear for impact
+Hover over different chart elements to show interactivity
+📊 KEY FEATURES SHOWCASE (1:20 - 2:00)
+Screen Action: Navigate through different visualization features
+Voice-Over Script:
+"But IRP-MeasureMind isn't just fast - it's intelligent. Notice how it automatically:"
+
+Feature Demonstration (Show each quickly):
+Click Bar Chart tab: "Chooses the perfect chart type with beautiful colors for comparisons"
+Click Line Chart tab: "Seamlessly switches between visualization types"
+Click Export SQL button: "Exports both data AND the generated SQL queries"
+Hover over chart elements: "Delivers interactive, presentation-ready results"
+Show table view: "With comprehensive data tables for detailed analysis"
+Screen Choreography:
+Click through chart types smoothly (bar → line → table)
+Demonstrate export functionality
+Show tooltip interactions on charts
+Scroll through results table briefly
+💰 BUSINESS IMPACT (2:00 - 2:30)
+Screen Action: Show a new query to demonstrate speed
+Voice-Over Script:
+"The ROI is immediate and measurable. Let me show you another example..."
+
+Quick Second Demo:
+Type new query: "Show me my facility's patient trends by diagnosis"
+Click Analyze: "We're transforming week-long development cycles into 30-second insights"
+Results appear: "No more IT tickets, no more waiting for developers, no more database refresh delays"
+Hover over results: "What used to require technical expertise is now as simple as asking a question"
+"This means faster clinical decisions, reduced IT workload, and healthcare professionals who can focus on what matters most - patient care, not waiting for reports. And because we're building this as a modular architecture, this same capability can be seamlessly integrated into IRP, IHP, and all our future healthcare platforms."
+
+Screen Choreography:
+Type the second query quickly to show ease of use
+Let processing happen in real-time (no cuts)
+Show different chart type to demonstrate versatility
+End on the results dashboard
+🚀 CLOSING & CALL TO ACTION (2:30 - 3:00)
+Screen Action: Return to main dashboard, scroll to show the full interface
+Voice-Over Script:
+"But here's the real strategic advantage - we're building this as a completely modular solution. This isn't just for IRP-MeasureMind. We can integrate this AI-powered analytics engine into ALL our projects - IRP, IHP, and any future healthcare platforms - with minimal development effort."
+
+"Imagine: one investment, multiple applications. Every healthcare solution we build gets instant natural language analytics capability. We're not just solving today's problem - we're future-proofing our entire product ecosystem."
+
+"IRP-MeasureMind isn't just a tool - it's our competitive advantage across every healthcare market we enter. The question isn't whether we can afford to implement this solution - it's whether we can afford not to. Thank you."
+
+Screen Choreography:
+Slowly scroll through the main interface showing all features
+Pause on the clean architecture and professional design
+End with the dashboard view showing the modular component structure
+Let the final screen linger for 2-3 seconds to emphasize the strategic vision
+Fade to black or end recording cleanly
+🎬 SCREEN RECORDING SETUP & TIPS
+Recording Software Setup:
+Software: OBS Studio, Loom, or Zoom (record screen)
+Resolution: 1920x1080 minimum for crisp quality
+Frame Rate: 30 FPS for smooth demonstrations
+Audio: High-quality microphone, test audio levels
+Browser Setup:
+Browser: Chrome in incognito mode (no extensions/bookmarks)
+Zoom: 125% for better text visibility
+Cursor: Large cursor size for visibility
+Tabs: Close all unnecessary tabs
+Notifications: Turn off all system notifications
+Demo Preparation:
+Pre-load application: Have IRP-MeasureMind ready and logged in
+Test queries: Practice typing the exact queries smoothly
+Network: Ensure stable, fast internet connection
+Backup plan: Have screenshots ready in case of issues
+Complex SQL: Prepare the intimidating SQL code in notepad
+Voice-Over Tips:
+Pace: Speak 10-15% slower than normal conversation
+Energy: Maintain enthusiasm throughout (smile while speaking)
+Clarity: Articulate clearly, especially technical terms
+Pauses: Use strategic pauses for emphasis and screen actions
+Script: Practice until you can deliver without reading
+Emphasis: Stress "modular", "all our projects", and "future-proofing" for strategic impact
+📋 REHEARSAL CHECKLIST
+Before Recording:
+[ ] Application running smoothly
+[ ] Sample data loaded
+[ ] All features tested
+[ ] Script memorized (not read)
+[ ] Lighting and camera angle optimized
+[ ] Background professional and clean
+During Recording:
+[ ] Confident posture and voice
+[ ] Smooth transitions between features
+[ ] Clear demonstration of each capability
+[ ] Strong opening and closing
+[ ] Stay within 3-minute limit
+Key Success Metrics:
+Clarity: VP understands the value proposition
+Impact: Business benefits clearly communicated
+Demonstration: Technology works flawlessly
+Confidence: Professional, winning presentation style
+🏆 WINNING FACTORS
+Problem-Solution Fit: Clear pain point → Clear solution
+Live Demo: Real working technology, not just slides
+Business Focus: ROI and efficiency gains, not technical details
+Professional Polish: Smooth delivery and interface
+Competitive Edge: Positions as strategic advantage
+Remember: You're not just presenting a tool - you're presenting a transformation. Show confidence, demonstrate value, and let the technology speak for itself!
+
+Good luck! 🚀
