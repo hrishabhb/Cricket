@@ -43,7 +43,7 @@ Let me paint a picture of what this looks like in the real world.
 
 It's Tuesday morning, 9:47 AM. Dr. Sarah Chen, an oncologist at one of our partner hospitals, is reviewing a patient's treatment plan. She needs to see outcomes for similar cases—lung cancer patients in California from the last year with comparable staging. This data exists in our system. She knows it does.
 
-So what does she do? She writes an email to IQVIA: *"Hi, I need to pull some case data for a treatment decision..."*
+So what does she do? She writes an email : *"Hi, I need to pull some case data for a treatment decision..."*
 
 That email goes to hospital management for review. If approved, it's forwarded to the associated registry organization—ACS, AHA, or similar. They evaluate whether it's a legitimate request and if they're seeing similar needs. Then, if everything aligns, it finally reaches IQVIA.
 
@@ -51,7 +51,7 @@ That email goes to hospital management for review. If approved, it's forwarded t
 
 For a treatment decision that needs to be made... **this week**.
 
-So Dr. Chen makes her best clinical judgment based on memory, general guidelines, and whatever limited data she can access quickly. The insights she needs? They're sitting in our database—just out of reach.
+So Dr. Chen makes her best clinical judgment based on memory, general guidelines, and whatever limited data she can access quickly or she will wait untill she get the information from IQVIA's end. The insights she needs? They're sitting in our database—just out of her reach.
 
 **This is the reality in healthcare—and at IQVIA—every single day.**
 
@@ -65,7 +65,7 @@ So here's our idea: **What if Dr. Chen could just... ask?**
 
 **[Pause for 2 seconds - let the question land]**
 
-What if, instead of emailing our tech team and waiting months, she could simply type:
+What if, instead of emailing and waiting months, she could simply type:
 
 > *"Show me lung cancer patient outcomes in California from the last year with stage 3 diagnosis"*
 
@@ -87,7 +87,7 @@ No SQL required. No technical training. No waiting. Just questions... and answer
 
 Let me walk you through how VitalsIQ would work in practice.
 
-**Step 1:** A hospital administrator types their question in plain English:
+**Step 1:** A hospital administrator types their question in natutral language:
 > *"How many lung cancer patients were reported by California facilities in 2024?"*
 
 **Step 2:** Behind the scenes, our AI engine—powered by Azure OpenAI—would:
@@ -99,9 +99,7 @@ Let me walk you through how VitalsIQ would work in practice.
 
 **Step 4:** Results appear instantly in both table format and interactive charts—automatically selected based on the type of data returned.
 
-**Total time: Under 3 seconds.**
-
-From question to answer. From confusion to clarity. From waiting to **winning**.
+**Total time: within seconds.**
 
 ---
 
@@ -119,7 +117,7 @@ From question to answer. From confusion to clarity. From waiting to **winning**.
 
 But most importantly, **VitalsIQ democratizes data access.**
 
-It removes the bottleneck between our data and the people who need it most. It transforms IQVIA from a data provider into a **real-time insights partner**. And it enables healthcare professionals to make faster, more informed decisions based on the comprehensive data they already trust us to maintain.
+It removes the bottleneck between our data and the people who need it most. And it enables healthcare professionals to make faster, more informed decisions based on the comprehensive data they already trust us to maintain.
 
 ---
 
@@ -145,13 +143,6 @@ We're proposing a **Context-Aware AI system** that:
 
 The goal? **95%+ accuracy on natural language queries from day one.**
 
-This isn't about teaching the AI generic SQL. It's about teaching it to think like a healthcare data expert who knows our systems inside and out.
-
-**And this is achievable:**
-- ✅ Proven technologies—all components are mature and enterprise-ready  
-- ✅ Clear architecture—well-defined three-tier design  
-- ✅ Technical expertise—our team has deep experience with these systems  
-- ✅ Risk mitigation—multiple validation layers and security checkpoints  
 
 This isn't science fiction. This is achievable with today's technology.
 
@@ -164,14 +155,10 @@ This isn't science fiction. This is achievable with today's technology.
 So who would benefit from VitalsIQ?
 
 **Primary users:**
-- **Registry domain users** – Staff managing ACS, trauma, stroke, and other clinical registries
+- **Registry domain users** 
 - **Medical Specialty Services (MSS) teams** – Clinical coordinators needing quick access to specialty data
 - **Hospital and health system administrators** – Decision-makers who need aggregate insights for planning and quality improvement
 
-**Secondary opportunities:**
-- Life sciences researchers
-- Pharma partners conducting real-world evidence studies
-- Quality improvement teams tracking clinical outcomes
 
 These are non-technical healthcare professionals who have critical questions but lack the SQL skills—or the time—to get answers through traditional channels.
 
@@ -195,11 +182,9 @@ We're proposing a focused, achievable timeline for proof of concept:
 
 **Success Criteria:**
 - AI generates valid SQL for **80%+ of test questions**
-- **Sub-5-second response time** for typical queries
 - **Zero security vulnerabilities** identified in testing
-- **Positive stakeholder feedback** from 3-5 domain expert reviews
 
-This is a realistic, achievable timeline that would give us concrete proof that VitalsIQ can deliver on its promise—without requiring massive upfront investment.
+This is a realistic, achievable timeline that would give us concrete proof that VitalsIQ can deliver.
 
 ---
 
@@ -215,10 +200,6 @@ Finally, let's talk about the practical realities: **Can this scale? What will i
 
 **Capacity planning** – We size Azure OpenAI capacity based on aggregated subscription quotas, ensuring we have the throughput we need
 
-**Azure scaling** – Using provisioned throughput tiers with autoscaling based on rolling 7-day and 30-day usage patterns
-
-**Application autoscaling** – API servers scale automatically; queue systems and backoff mechanisms smooth out usage spikes
-
 **Proactive monitoring** – Tracking requests, tokens, and latency; alerts trigger at >80% utilization to allow capacity increases before users experience degradation
 
 **Cost Estimate:**
@@ -230,9 +211,7 @@ Let me give you quick math based on realistic assumptions:
 - **Total monthly tokens:** 300 million tokens
 - **Azure OpenAI cost:** At $0.002 per 1K tokens = **~$600/month**
 
-That's for the AI component alone—highly scalable, highly predictable. Infrastructure costs would add moderately but remain proportional to usage.
-
-**Bottom line:** VitalsIQ is designed to scale efficiently with demand while maintaining predictable costs.
+That's for the AI component alone—highly scalable, highly predictable.
 
 ---
 
@@ -242,25 +221,6 @@ That's for the AI component alone—highly scalable, highly predictable. Infrast
 
 Let me bring this all together.
 
-**[Speak with conviction and energy]**
-
-Right now, today, healthcare professionals are waiting months for data that already exists in our systems. VitalsIQ changes that reality—transforming IQVIA from a data repository into a **real-time insights partner**.
-
-This isn't just about faster queries. It's about:
-- **Empowering better clinical decisions** at the moment they matter most
-- **Demonstrating IQVIA's commitment to innovation** in healthcare technology  
-- **Creating new revenue streams** through self-service analytics  
-- **Differentiating our offerings** in an increasingly competitive market  
-
-We have the technology. We have the expertise. We have the data.
-
-**What we're proposing is connecting them in a way that creates immediate, measurable value.**
-
-**[Pause, lean in slightly, final statement with confidence]**
-
-We're excited about VitalsIQ, and we believe a focused proof of concept can demonstrate its potential quickly and cost-effectively. The future of healthcare data access doesn't have to be months away—it can be seconds away.
-
-**Thank you for considering this idea. Let's make data accessible for those who need it most.**
 
 ---
 
